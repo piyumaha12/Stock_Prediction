@@ -7,7 +7,7 @@ import datetime
 import yfinance as yf
 from PIL import Image
 
-st.set_page_config(page_title= 'Bankruptcy Prediction 📈', page_icon = '💰', layout= 'wide',
+st.set_page_config(page_title= 'Stock Forecasting 📈', page_icon = '📈', layout= 'wide',
                    initial_sidebar_state= 'expanded',
                    menu_items= {'Get help': 'https://streamlit.io/gallery?category=finance-business'})
 
@@ -52,7 +52,7 @@ def gap_calculate(data):
     dt_breaks_hr = [d for d in dt_all_hr.strftime("%Y-%m-%d %H:%M:%S").tolist() if not d in dt_obs_hr]
     return dt_breaks_hr
 
-def candle_plot_fun(data, period):
+def candle_plot_fun(data, interval):
     fig = go.Figure(data=[go.Candlestick(x=data.index,
                                          open=data['Open'],
                                          high=data['High'],
@@ -60,12 +60,21 @@ def candle_plot_fun(data, period):
                                          close=data['Close'])])
 
     fig.update_layout(xaxis_rangeslider_visible=False, hovermode='x unified')
-    if 'm' in period or 'h' in period:
+    if 'm' in interval or 'h' in interval:
         fig.update_xaxes(rangebreaks = [dict(values = gap_calculate(data)), dict(pattern='hour', bounds=[15.5, 9.24])])
     else:
         fig.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
     st.plotly_chart(fig, use_container_width= True)
     return fig
+
+def volume_plot(data, interval):
+    area = px.area(data_frame=data,
+                   x=data.index,
+                   y='Volume', markers=True,
+                   hover_data=['High', 'Low'])
+    area.update_traces(line_color='Blue')
+    st.plotly_chart(area)
+    
 
 
 def get_symbol(selection):
@@ -75,33 +84,59 @@ def get_symbol(selection):
     return SYMBOL
 
 
+def model_dataset(data):
+    pass
+
+def forecasting(model, data):
+    pass
+
+
+
 def main():
     # st.title('Stock Forecasting')
     st.markdown("<h1 style= 'text-align:center'> Stock Forecasting and Analysis </h1> ", unsafe_allow_html=True)
-    _, col,_ = st.columns([1,4,1])
+    _, col,_ = st.columns([1,3,1])
     share_image = Image.open('business-growth.jpg')
     col.image(share_image)
 
-    col1, col2 = st.columns([3,1])
+    col1, interval_col, period_col = st.columns([3,1,1])
     with col1:
         selection = st.selectbox(
             label= 'Select Company',
             options = companies['NAME OF COMPANY']
         )
-    with col2:
-        period = st.selectbox(
+    with interval_col:
+        interval = st.selectbox(
             label = 'Select interval of stocks',
             options = ['2m','5m','15m','30m','60m','90m','1h','1d','5d','1wk','1mo','3mo']
         )
 
+    with period_col:
+        period = st.number_input(
+            label= 'Select period of data (in years)',
+            min_value = 1,
+            max_value = 10,
+            value = 1,
+            step = 1
+        )
+        period = int(period)
     SYMBOL = get_symbol(selection)
-    
-    stock_data= fetch_data(symbol=SYMBOL, interval= period, data_of_years= 1)
+
+    stock_data= fetch_data(symbol=SYMBOL, interval= interval, data_of_years=period )
     st.dataframe(stock_data, width = 1200)
 
-    fig =candle_plot_fun(stock_data, period)
+    candle_col, volume_col = st.columns(2)
+    with candle_col:
+        st.subheader('Candle plot')
+        candle_plot_fun(stock_data, interval)
 
-    st.write('Grkgd')
+    with volume_col:
+        st.subheader('Volume plot')
+        volume_plot(stock_data, interval)
+
+
+    data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 5)
+
 
 
 if __name__ == '__main__':
