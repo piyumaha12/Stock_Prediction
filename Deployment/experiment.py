@@ -5,13 +5,13 @@ import plotly.express as px
 import plotly.graph_objs as go
 import datetime
 import yfinance as yf
+from PIL import Image
 
 st.set_page_config(page_title= 'Bankruptcy Prediction 📈', page_icon = '💰', layout= 'wide',
                    initial_sidebar_state= 'expanded',
                    menu_items= {'Get help': 'https://streamlit.io/gallery?category=finance-business'})
 
-
-PATH = 'H:\Excelr\Project\Stock_Prediction\csv_files\Tatamotors_5years.csv'
+companies = pd.read_csv('EQUITY_L.csv')
 
 
 # Function to retrive data from y_finance
@@ -26,13 +26,13 @@ def fetch_data(symbol, interval='1d', data_of_years=1):
     '''
 
     if interval in ['2m', '5m', '15m', '30m']:
-        print('Sorry, but only 2 month data can be extracted for given interval')
+        # print('Sorry, but only 2 month data can be extracted for given interval')
         current_time = datetime.datetime.now()
         month_value = current_time.month - 2
-        """
-        Following can be used to get 2 month previous date
-        datetime.datetime.now()-datetime.timedelta(days=60)
-        """
+        # """
+        # Following can be used to get 2 month previous date
+        # datetime.datetime.now()-datetime.timedelta(days=60)
+        # """
         starting_date = current_time.replace(month= month_value)
     else:
         year_value = datetime.datetime.now().year-data_of_years
@@ -52,8 +52,7 @@ def gap_calculate(data):
     dt_breaks_hr = [d for d in dt_all_hr.strftime("%Y-%m-%d %H:%M:%S").tolist() if not d in dt_obs_hr]
     return dt_breaks_hr
 
-def candle_plot_fun(data):
-
+def candle_plot_fun(data, period):
     fig = go.Figure(data=[go.Candlestick(x=data.index,
                                          open=data['Open'],
                                          high=data['High'],
@@ -61,19 +60,46 @@ def candle_plot_fun(data):
                                          close=data['Close'])])
 
     fig.update_layout(xaxis_rangeslider_visible=False, hovermode='x unified')
-    fig.update_xaxes(rangebreaks = [dict(values = gap_calculate(data))])
+    if 'm' in period or 'h' in period:
+        fig.update_xaxes(rangebreaks = [dict(values = gap_calculate(data)), dict(pattern='hour', bounds=[15.5, 9.24])])
+    else:
+        fig.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
     st.plotly_chart(fig, use_container_width= True)
     return fig
 
 
+def get_symbol(selection):
+    index_no = companies.index[companies['NAME OF COMPANY'] == selection].values
+    SYMBOL = companies.loc[index_no, 'SYMBOL'].values
+    SYMBOL = SYMBOL[0]+'.NS'
+    return SYMBOL
+
+
 def main():
+    # st.title('Stock Forecasting')
     st.markdown("<h1 style= 'text-align:center'> Stock Forecasting and Analysis </h1> ", unsafe_allow_html=True)
+    _, col,_ = st.columns([1,4,1])
+    share_image = Image.open('business-growth.jpg')
+    col.image(share_image)
 
+    col1, col2 = st.columns([3,1])
+    with col1:
+        selection = st.selectbox(
+            label= 'Select Company',
+            options = companies['NAME OF COMPANY']
+        )
+    with col2:
+        period = st.selectbox(
+            label = 'Select interval of stocks',
+            options = ['2m','5m','15m','30m','60m','90m','1h','1d','5d','1wk','1mo','3mo']
+        )
+
+    SYMBOL = get_symbol(selection)
     
-    tatamotors_5year= fetch_data(symbol='TATAMOTORS.NS', data_of_years= 1)
-    st.dataframe(tatamotors_5year, width = 1000)
+    stock_data= fetch_data(symbol=SYMBOL, interval= period, data_of_years= 1)
+    st.dataframe(stock_data, width = 1200)
 
-    fig =candle_plot_fun(tatamotors_5year)
+    fig =candle_plot_fun(stock_data, period)
 
     st.write('Grkgd')
 
