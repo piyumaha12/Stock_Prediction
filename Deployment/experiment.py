@@ -69,8 +69,9 @@ def candle_plot_fun(data):
 def main():
     st.markdown("<h1 style= 'text-align:center'> Stock Forecasting and Analysis </h1> ", unsafe_allow_html=True)
 
+    
     tatamotors_5year= fetch_data(symbol='TATAMOTORS.NS', data_of_years= 1)
-    st.dataframe(tatamotors_5year)
+    st.dataframe(tatamotors_5year, width = 1000)
 
     fig =candle_plot_fun(tatamotors_5year)
 
