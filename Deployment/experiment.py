@@ -34,10 +34,14 @@ def fetch_data(symbol, interval='1d', data_of_years=1):
         # datetime.datetime.now()-datetime.timedelta(days=60)
         # """
         starting_date = current_time.replace(month= month_value)
+    elif interval == '1m':
+        starting_date = datetime.datetime.now()-datetime.timedelta(days=6)
+
     else:
         year_value = datetime.datetime.now().year-data_of_years
         ending_date = datetime.datetime.now()
         starting_date = ending_date.replace(year=year_value)
+
     data = yf.Ticker(symbol)
     data = data.history(interval=interval, start= starting_date)
     return data
@@ -73,6 +77,14 @@ def volume_plot(data, interval):
                    y='Volume', markers=True,
                    hover_data=['High', 'Low'])
     area.update_traces(line_color='Blue')
+    area.update_layout(xaxis_rangeslider_visible=False, hovermode='x unified')
+    if 'm' in interval or 'h' in interval:
+        area.update_xaxes(rangebreaks=[dict(values=gap_calculate(data)), dict(pattern='hour', bounds=[15.5, 9.24])])
+    else:
+        area.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
+    st.plotly_chart(area, use_container_width=True)
+    return area
+
     st.plotly_chart(area)
     
 
@@ -108,7 +120,8 @@ def main():
     with interval_col:
         interval = st.selectbox(
             label = 'Select interval of stocks',
-            options = ['2m','5m','15m','30m','60m','90m','1h','1d','5d','1wk','1mo','3mo']
+            options = ['1m' ,'2m','5m','15m','30m','1h','1d','5d','1wk','1mo','3mo'],
+            index = 6
         )
 
     with period_col:
