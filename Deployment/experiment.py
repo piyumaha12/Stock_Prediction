@@ -87,7 +87,8 @@ def volume_plot(data, interval):
 
     st.plotly_chart(area)
     
-
+def weeks_high_low(data):
+    date_52week = data.index.max()-datetime.timedelta(weeks=52)
 
 def get_symbol(selection):
     index_no = companies.index[companies['NAME OF COMPANY'] == selection].values
