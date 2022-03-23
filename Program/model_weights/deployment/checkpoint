@@ -1,0 +1,2 @@
+model_checkpoint_path: "for_deployment.tf"
+all_model_checkpoint_paths: "for_deployment.tf"
