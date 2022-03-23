@@ -5,19 +5,23 @@ import plotly.express as px
 import plotly.graph_objs as go
 import datetime
 import yfinance as yf
+import tensorflow as tf
 from PIL import Image
+from tensorflow.keras.layers import Bidirectional, LSTM, GRU, Dense
+from tensorflow.keras import Sequential
+
+
 
 st.set_page_config(page_title='Stock Forecasting 📈', page_icon='📈', layout='wide',
                    initial_sidebar_state= 'expanded',
                    menu_items={'Get help': 'https://streamlit.io/gallery?category=finance-business'})
 
 companies = pd.read_csv('EQUITY_L.csv')
-data_for_model = None
 
 
 # Function to retrive data from y_finance
 
-@st.cache
+@st.cache(allow_output_mutation=True)
 def fetch_data(symbol, interval='1d', data_of_years=1):
     ''':param
     - symbol: Pass symbol on respective company
@@ -25,7 +29,7 @@ def fetch_data(symbol, interval='1d', data_of_years=1):
                 extract from [2m,5m,15m,30m, 60m, 1d,]
     - data_of_years: for how many of years of data you wants
     '''
-    global data_for_model
+
     if interval in ['2m', '5m', '15m', '30m']:
         # print('Sorry, but only 2 month data can be extracted for given interval')
         current_time = datetime.datetime.now()
@@ -45,7 +49,7 @@ def fetch_data(symbol, interval='1d', data_of_years=1):
 
     data = yf.Ticker(symbol)
     data = data.history(interval=interval, start= starting_date)
-    data_for_model = data
+
     return data
 
 # def save_to_csv(data, file_name,):
@@ -127,12 +131,66 @@ def get_symbol(selection):
     return SYMBOL
 
 @st.cache
-def model_dataset(data):
-    pass
+def Time_series_dataset(data, time_step = 50, columns = ['Open'],
+                        target_colm = ['Open'], values_in_target = 1, dataframe = False):
+    '''
+    This function returns two arrays one dataset and other target dataset.
+    target dataset can be singular or multiples
+    - data : dataframe object consists of feature and target_colm
+    - time_step : window size for building dataset
+    - columns : list of columns that will be used as features
+    - target_colm : list of target_colm
+    - values_in_target : It is the no of values should be in target columns of dataset
+    '''
+    n = len(columns)
+    for i in range(data.shape[0]-time_step-values_in_target):
+        values = data[columns][i:time_step+i].to_numpy().reshape(-1,time_step,n)
+
+        target_value = data[target_colm].iloc[time_step+i:time_step+i+values_in_target,:].to_numpy()
+        target_value = target_value.reshape(-1, target_value.shape[0], target_value.shape[1])
+        if i == 0:
+            dataset = values
+            target_values = target_value
+        else:
+            dataset = np.concatenate((dataset, values))
+            target_values = np.concatenate((target_values, target_value))
+    if columns == target_colm and len(columns) == 1 and dataframe is True:
+        dataset = dataset.reshape(dataset.shape[0], -1)
+        target_values = target_values.reshape(dataset.shape[0], -1)
+        data = pd.DataFrame(dataset)
+        data['target'] = target_values
+        return data
+    else:
+        if len(target_colm)==1:
+            target_values = target_values.reshape(target_values.shape[0], -1)
+        return dataset, target_values
 
 @st.cache
 def forecasting(model, data):
     pass
+
+def lstm_model(x_data, y_data):
+    model_3 = Sequential([
+        Bidirectional(LSTM(50, recurrent_regularizer=tf.keras.regularizers.L2(0.1),
+                                   return_sequences=True), input_shape=(50, 1)),
+        Bidirectional(LSTM(50, recurrent_regularizer=tf.keras.regularizers.L2(0.1),
+                                    return_sequences=True)),
+        GRU(50),
+        Dense(25, activation='relu'),
+        Dense(1)
+    ])
+
+    model_3.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
+        loss=tf.keras.losses.MeanSquaredError(),
+        metrics=[tf.keras.losses.MeanAbsoluteError()]
+    )
+    model_3.load_weights('for_deployment.h5')
+    # model_3.trainable = True
+    # model_3.fit(x_data, y_data, epochs= 10)
+    return model_3
+
+
 
 @st.cache
 def convert_df(df):
@@ -140,91 +198,81 @@ def convert_df(df):
     return df.to_csv().encode('utf-8')
 
 
+
 def main():
 
-    selection_side = st.sidebar.selectbox('SELECT FROM BELOW',
-                                     (
-                                         'HOME', 'ANALYSE',
-                                         'FORECASTING'
-                                     ))
-
-    if selection_side == 'HOME':
-        global data_for_model
-        # st.title('Stock Forecasting')
-        st.markdown("<h1 style= 'text-align:center'> Stock Forecasting and Analysis </h1> ", unsafe_allow_html=True)
-        _, col,_ = st.columns([0.2,5,0.2])
-        share_image = Image.open('bull_bear.jpg')
-        col.image(share_image)
+    # st.title('Stock Forecasting')
+    st.markdown("<h1 style= 'text-align:center'> Stock Forecasting and Analysis </h1> ", unsafe_allow_html=True)
+    _, col,_ = st.columns([0.2,5,0.2])
+    share_image = Image.open('bull_bear.jpg')
+    col.image(share_image)
 
 
-        company_col, interval_col, period_col = st.columns([3,1,1])
-        with company_col:
-            selection = st.selectbox(
-                label= 'Select Company',
-                options = companies['NAME OF COMPANY']
-            )
-        with interval_col:
-            interval = st.selectbox(
-                label = 'Select interval of stocks',
-                options = ['1m' ,'2m','5m','15m','30m','1h','1d','5d','1wk','1mo','3mo'],
-                index = 6
-            )
-        with period_col:
-            period = st.number_input(
-                label= 'Select period of data (in years)',
-                min_value = 1,
-                max_value = 10,
-                value = 1,
-                step = 1
-            )
-            period = int(period)
-
-
-        SYMBOL = get_symbol(selection)
-        stock_data= fetch_data(symbol=SYMBOL, interval= interval, data_of_years=period )
-        st.write('')
-
-
-        open_col, close_col, high_col, low_col, download_col = st.columns([1,1,1,1,4])
-        high, low, open, close, open_change, close_change = weeks_high_low(stock_data)
-        with open_col:
-            st.metric('Open', open, open_change)
-        with close_col:
-            st.metric('Close', close, close_change)
-        with high_col:
-            st.metric('52weeks High', high)
-        with low_col:
-            st.metric('52weeks Low', low)
-
-        dataframe_col, col = st.columns([4,1])
-        dataframe_col.dataframe(stock_data, width = 1400)
-
-        st.download_button(
-            label="Download data as CSV",
-            data=convert_df(stock_data),
-            file_name= selection+'.csv',
-            mime='text/csv',
+    company_col, interval_col, period_col = st.columns([3,1,1])
+    with company_col:
+        selection = st.selectbox(
+            label= 'Select Company',
+            options = companies['NAME OF COMPANY']
         )
+    with interval_col:
+        interval = st.selectbox(
+            label = 'Select interval of stocks',
+            options = ['1m' ,'2m','5m','15m','30m','1h','1d','5d','1wk','1mo','3mo'],
+            index = 6
+        )
+    with period_col:
+        period = st.number_input(
+            label= 'Select period of data (in years)',
+            min_value = 1,
+            max_value = 10,
+            value = 1,
+            step = 1
+        )
+        period = int(period)
 
-        # candle_col, volume_col = st.columns(2)
-        # with candle_col:
-        st.subheader('Candle plot')
-        candle_plot_fun(stock_data, interval)
 
-        # with volume_col:
-        st.subheader('Volume plot')
-        volume_plot(stock_data, interval)
-        data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 6)
+    SYMBOL = get_symbol(selection)
+    stock_data= fetch_data(symbol=SYMBOL, interval= interval, data_of_years=period )
+    st.write('')
 
-    elif selection_side == 'ANALYSE':
-        global data_for_model
-        st.header('Stock Analysis using Moving Average')
-        data_for_model['MA2'] = data_for_model.Close.rolling(2).mean()
-        fig = px.line(data_frame=data_for_model.iloc[:100, :],
-                      x=data_for_model.index[:100],
-                      y='MA2')
-        fig.update_layout(hovermode='x unified')
-        st.plotly_chart(fig)
+
+    open_col, close_col, high_col, low_col, download_col = st.columns([1,1,1,1,4])
+    high, low, open, close, open_change, close_change = weeks_high_low(stock_data)
+    with open_col:
+        st.metric('Open', open, open_change)
+    with close_col:
+        st.metric('Close', close, close_change)
+    with high_col:
+        st.metric('52weeks High', high)
+    with low_col:
+        st.metric('52weeks Low', low)
+
+    dataframe_col, col = st.columns([4,1])
+    dataframe_col.dataframe(stock_data, width = 1400)
+
+    st.download_button(
+        label="Download data as CSV",
+        data=convert_df(stock_data),
+        file_name= selection+'.csv',
+        mime='text/csv',
+    )
+
+    # candle_col, volume_col = st.columns(2)
+    # with candle_col:
+    st.subheader('Candle plot')
+    candle_plot_fun(stock_data, interval)
+
+    # with volume_col:
+    st.subheader('Volume plot')
+    volume_plot(stock_data, interval)
+    data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 6)
+
+    st.write('')
+    st.header('Stock Forecasting')
+    X,Y = Time_series_dataset(data_for_model)
+    model = lstm_model(X,Y)
+    score = model.evaluate(X,Y)
+    st.write(f'Score is {score}')
 
 
 if __name__ == '__main__':
