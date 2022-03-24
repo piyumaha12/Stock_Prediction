@@ -123,12 +123,14 @@ def weeks_high_low(data):
     close_change = round((close - open), 4)
     return high, low, open, close, open_change, close_change
 
+
 @st.cache
 def get_symbol(selection):
     index_no = companies.index[companies['NAME OF COMPANY'] == selection].values
     SYMBOL = companies.loc[index_no, 'SYMBOL'].values
     SYMBOL = SYMBOL[0]+'.NS'
     return SYMBOL
+
 
 @st.cache
 def Time_series_dataset(data, time_step = 50, columns = ['Open'],
@@ -165,16 +167,46 @@ def Time_series_dataset(data, time_step = 50, columns = ['Open'],
             target_values = target_values.reshape(target_values.shape[0], -1)
         return dataset, target_values
 
+
 @st.cache
-def forecasting(model, data):
-    pass
+def scaling_values(dataset, max, min):
+    ''':param
+    dataset: feed dataset
+    max: max value
+    min: min value
+    '''
+    dataset = (dataset - min) / (max - min)
+    return dataset
+
+
+def reverse_scaling(dataset, max, min):
+    dataset = dataset*(max-min) + min
+    return dataset
+
+
+def forecasting_data(model, data, no_predictions):
+    '''
+    This function return array of forecast values given data and model,
+    forecasts no_prediction steps
+    '''
+    predictions = []
+    last_steps = data[-1]
+    print(last_steps.shape)
+    last_values = last_steps.reshape(-1, data.shape[1], data.shape[2])
+    for i in range(no_predictions):
+        prediction = model.predict(last_values)
+        predictions.extend(prediction.tolist())
+        prediction = prediction.reshape(-1, prediction.shape[0], prediction.shape[1])
+        last_values = np.concatenate((last_values[:, 1:, :], prediction), axis=1)
+    return np.array(predictions)
+
 
 def lstm_model(x_data, y_data):
     model_3 = Sequential([
         Bidirectional(LSTM(50, recurrent_regularizer=tf.keras.regularizers.L2(0.1),
-                                   return_sequences=True), input_shape=(50, 1)),
+                    return_sequences=True), input_shape=(50, 1)),
         Bidirectional(LSTM(50, recurrent_regularizer=tf.keras.regularizers.L2(0.1),
-                                    return_sequences=True)),
+                    return_sequences=True)),
         GRU(50),
         Dense(25, activation='relu'),
         Dense(1)
@@ -186,8 +218,8 @@ def lstm_model(x_data, y_data):
         metrics=[tf.keras.losses.MeanAbsoluteError()]
     )
     model_3.load_weights('for_deployment.h5')
-    # model_3.trainable = True
-    # model_3.fit(x_data, y_data, epochs= 10)
+    model_3.trainable = True
+    model_3.fit(x_data, y_data, epochs= 5)
     return model_3
 
 
@@ -196,6 +228,25 @@ def lstm_model(x_data, y_data):
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
+
+
+def next_days(date_index, no_prediction):
+    last_date = date_index[-1]
+    next_dates = [last_date + pd.tseries.offsets.BusinessDay(n = i) for i in range(1, no_prediction)]
+
+    return next_dates
+
+
+def plot_forecast(data, forecasting, max, min, date_index, no_prediction):
+    A = np.empty_like(data[-150:].ravel())
+    next_dates = next_days(date_index, no_prediction)
+    forecasting = reverse_scaling(forecasting, max, min)
+    A.fill(None)
+    A = np.concatenate((A, forecasting.ravel()))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(y=A, name = "Forecast"))
+    fig.add_trace(go.Scatter(y=data[-150:].ravel(), name = 'Past values'))
+    st.plotly_chart(fig, use_container_width= True)
 
 
 
@@ -266,13 +317,27 @@ def main():
     st.subheader('Volume plot')
     volume_plot(stock_data, interval)
     data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 6)
+    date_index = data_for_model.index[50:].to_list()
 
     st.write('')
     st.header('Stock Forecasting')
-    X,Y = Time_series_dataset(data_for_model)
-    model = lstm_model(X,Y)
-    score = model.evaluate(X,Y)
-    st.write(f'Score is {score}')
+    if st.button('Forecast'):
+        X,Y = Time_series_dataset(data_for_model,
+                                  time_step=50, columns=['Open'],
+                                  target_colm=['Open'], values_in_target=1, dataframe=False
+                                  )
+        max = X.max(axis = (0,1))
+        min = X.min(axis = (0,1))
+        X_scaled = scaling_values(X, max, min)
+        Y_scaled = scaling_values(Y, max, min)
+        # fig = px.line(y=Y.ravel())
+        # st.plotly_chart(fig)
+        model = lstm_model(X_scaled,Y_scaled)
+        no_prediction = 10
+        forecast = forecasting_data(model, X_scaled, no_predictions= no_prediction)
+        plot_forecast(Y, forecast, max, min, date_index, no_prediction)
+
+
 
 
 if __name__ == '__main__':
