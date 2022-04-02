@@ -76,7 +76,7 @@ def candle_plot_fun(data, interval):
         fig.update_xaxes(rangebreaks = [dict(values = gap_calculate(data)), dict(pattern='hour', bounds=[15.5, 9.24])])
     else:
         fig.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
-    st.plotly_chart(fig, use_container_width= True)
+    # st.plotly_chart(fig, use_container_width= True)
     return fig
 
 
@@ -91,9 +91,9 @@ def volume_plot(data, interval):
         area.update_xaxes(rangebreaks=[dict(values=gap_calculate(data)), dict(pattern='hour', bounds=[15.5, 9.24])])
     else:
         area.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
-    st.plotly_chart(area, use_container_width=True)
+    # st.plotly_chart(area, use_container_width=True)
     return area
-    st.plotly_chart(area)
+    # st.plotly_chart(area)
 
 
 @st.cache
@@ -232,8 +232,7 @@ def convert_df(df):
 
 def next_days(date_index, no_prediction):
     last_date = date_index[-1]
-    next_dates = [last_date + pd.tseries.offsets.BusinessDay(n = i) for i in range(1, no_prediction)]
-
+    next_dates = [last_date + pd.tseries.offsets.BusinessDay(n = i) for i in range(1, (no_prediction+1))]
     return next_dates
 
 
@@ -246,8 +245,8 @@ def plot_forecast(data, forecasting, max, min, date_index, no_prediction):
     fig = go.Figure()
     fig.add_trace(go.Scatter(y=A, name = "Forecast"))
     fig.add_trace(go.Scatter(y=data[-150:].ravel(), name = 'Past values'))
-    st.plotly_chart(fig, use_container_width= True)
-
+    # st.plotly_chart(fig, use_container_width= 1000)
+    return fig
 
 
 def main():
@@ -281,11 +280,9 @@ def main():
         )
         period = int(period)
 
-
     SYMBOL = get_symbol(selection)
     stock_data= fetch_data(symbol=SYMBOL, interval= interval, data_of_years=period )
     st.write('')
-
 
     open_col, close_col, high_col, low_col, download_col = st.columns([1,1,1,1,4])
     high, low, open, close, open_change, close_change = weeks_high_low(stock_data)
@@ -311,13 +308,18 @@ def main():
     # candle_col, volume_col = st.columns(2)
     # with candle_col:
     st.subheader('Candle plot')
-    candle_plot_fun(stock_data, interval)
+    fig =candle_plot_fun(stock_data, interval)
+    st.plotly_chart(fig, use_container_width=True)
 
     # with volume_col:
     st.subheader('Volume plot')
-    volume_plot(stock_data, interval)
+    area = volume_plot(stock_data, interval)
+    st.plotly_chart(area, use_container_width=True)
+
+
     data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 6)
     date_index = data_for_model.index[50:].to_list()
+
 
     st.write('')
     st.header('Stock Forecasting')
@@ -335,9 +337,18 @@ def main():
         model = lstm_model(X_scaled,Y_scaled)
         no_prediction = 10
         forecast = forecasting_data(model, X_scaled, no_predictions= no_prediction)
-        plot_forecast(Y, forecast, max, min, date_index, no_prediction)
+        forecast_col, plot_col = st.columns([1,3])
 
-
+        with forecast_col:
+            st.write(' ')
+            forecasting = reverse_scaling(forecast, max, min)
+            dates = next_days(date_index, no_prediction)
+            forecast_df = pd.DataFrame(dates, columns= ['Dates'])
+            forecast_df['Forecast'] = forecasting
+            st.dataframe(forecast_df, width= 800)
+        with plot_col:
+            fig = plot_forecast(Y, forecast, max, min, date_index, no_prediction)
+            st.plotly_chart(fig, use_container_width=1000)
 
 
 if __name__ == '__main__':
