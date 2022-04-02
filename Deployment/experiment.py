@@ -93,7 +93,6 @@ def volume_plot(data, interval):
         area.update_xaxes(rangebreaks=[dict(values=gap_calculate(data))])
     # st.plotly_chart(area, use_container_width=True)
     return area
-    # st.plotly_chart(area)
 
 
 @st.cache
@@ -313,8 +312,8 @@ def main():
 
     # with volume_col:
     st.subheader('Volume plot')
-    area = volume_plot(stock_data, interval)
-    st.plotly_chart(area, use_container_width=True)
+    area_v = volume_plot(stock_data, interval)
+    st.plotly_chart(area_v, use_container_width=True)
 
 
     data_for_model = fetch_data(symbol=SYMBOL, data_of_years = 6)
